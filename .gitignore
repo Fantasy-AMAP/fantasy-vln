@@ -1,0 +1,7 @@
+# data directories
+/lhvln/data/
+/data/json_files/
+
+# data files
+/data/lhvln_tcot_anno.xlsx
+

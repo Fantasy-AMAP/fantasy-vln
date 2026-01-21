@@ -1,0 +1,15 @@
+<|stop|>
+<|forward|>
+<|left|>
+<|right|>
+<|NAV|>
+<think>
+</think>
+<answer>
+</answer>
+<var>
+</var>
+<textual_think>
+<visual_think>
+<no_textual_think>
+<no_visual_think>

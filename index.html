@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+    content="FantasyVLN: Unified Multimodal Chain-of-Thought Reasoning for Vision-and-Language Navigation">
+  <meta name="keywords" content="Video Generation, Diffusion Models, World Models">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- More research下拉菜单 开始 -->
+  <div
+    style="width:100%; display: flex; justify-content: center; align-items: center; margin-top: 20px; position: relative; z-index: 100;">
+    <div style="position: relative; display:inline-block;">
+      <button id="moreResearchBtn"
+        style="background-color: #fff; color: #333; padding: 10px 24px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">
+        More research ▼
+      </button>
+      <div id="moreResearchDropdown"
+        style="display: none; position: absolute; left: 0; top: 110%; background: #fff; border: 1px solid #ccc; border-radius: 5px; box-shadow:0 6px 12px rgba(0,0,0,0.1); min-width: 180px; z-index: 999;">
+      </div>
+    </div>
+  </div>
+  <!-- More research下拉菜单 结束 -->
+
+  <title>FantasyVLN: Unified Multimodal Chain-of-Thought Reasoning for Vision-and-Language Navigation</title>
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+
+    gtag('js', new Date());
+
+    gtag('config', 'G-PYVRSFMDRL');
+  </script> -->
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+</head>
+
+<body>
+  <section class="hero-transparent hero-landing">
+    <div class="container is-max-desktop hero-shell">
+      <div class="hero-stack has-text-centered">
+        <h1 class="title is-1 publication-title hero-title">FantasyVLN</h1>
+        <p class="subtitle hero-subtitle">Unified Multimodal Chain-of-Thought Reasoning for Vision-and-Language
+          Navigation</p>
+
+        <div class="publication-authors">
+          <div class="hero-authors">
+            <span class="author-block">Jing Zuo<sup>1,2,*,§</sup></span>
+            <span class="author-block">Lingzhou Mu<sup>1,3,*,§</sup></span>
+            <span class="author-block"><a href="https://frankjiang.github.io/" target="_blank">Fan
+                Jiang</a><sup>1,*,†,‡</sup></span>
+            <span class="author-block">Chengcheng Ma<sup>1</sup></span>
+          </div>
+          <div class="hero-authors">
+            <span class="author-block">Mu Xu<sup>1</sup></span>
+            <span class="author-block">YongGang Qi<sup>2‡</sup></span>
+          </div>
+        </div>
+
+        <div class="publication-authors hero-affiliations">
+          <span class="author-block"><sup>1</sup>Fantasy AIGC Team</span>
+          <span class="author-block"><sup>2</sup>Beijing University of Posts and Telecommunications</span>
+          <span class="author-block"><sup>3</sup>Tsinghua University</span>
+        </div>
+
+        <div class="publication-authors hero-notes">
+          <span class="author-block"><sup>*</sup>Equal contribution</span>
+          <span class="author-block"><sup>†</sup>Project leader</span>
+          <span class="author-block"><sup>‡</sup>Corresponding author</span>
+          <span class="author-block"><sup>§</sup>Work done during internship at Fantasy AIGC Team</span>
+        </div>
+
+        <div class="publication-links">
+          <!-- PDF Link. -->
+          <!-- todo: add paper url and code url -->
+          <span class="link-block">
+            <a href="https://arxiv.org/abs/2601.13976" class="external-link button is-normal is-rounded is-dark">
+              <span class="icon">
+                <i class="ai ai-arxiv"></i>
+              </span>
+              <span>arXiv</span>
+            </a>
+          </span>
+          <!-- Code Link. -->
+          <span class="link-block">
+            <a href="https://github.com/Fantasy-AMAP/fantasy-vln"
+              class="external-link button is-normal is-rounded is-dark">
+              <span class="icon">
+                <i class="fab fa-github"></i>
+              </span>
+              <span>Code</span>
+            </a>
+          </span>
+          <span class="link-block">
+            <a href="https://huggingface.co/acvlab/FantasyVLN"
+              class="external-link button is-normal is-rounded is-dark" target="_blank">
+              <span class="icon">
+                <img class="brand-icon" src="./static/img/huggingface.svg" alt="HuggingFace">
+              </span>
+              <span>Model</span>
+            </a>
+          </span>
+          <span class="link-block">
+            <a href="https://modelscope.cn/models/amap_cvlab/FantasyVLN"
+              class="external-link button is-normal is-rounded is-dark" target="_blank">
+              <span class="icon">
+                <img class="brand-icon" src="./static/img/modelscope.svg" alt="ModelScope">
+              </span>
+              <span>Model</span>
+            </a>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="section section-intro">
+    <div class="container is-max-desktop">
+      <!-- todo: add video   -->
+      <video class="video-player" autoplay loop playsinline>
+        <source src="./assets/FantasyVLN-demo.mp4" type="video/mp4">
+      </video>
+      <div class="columns is-vcentered columns-offset-lg">
+        <div class="column is-full-width">
+          <div class="content has-text-justified">
+            <p>
+              Achieving human-level performance in Vision-and-Language Navigation (VLN) requires an embodied agent to
+              jointly understand multimodal instructions
+              and visual-spatial context while reasoning over long action sequences. Recent works, such as NavCoT and
+              NavGPT-2, demonstrate the potential of Chain-of-Thought (CoT)
+              reasoning for improving interpretability and long-horizon planning. Moreover, multimodal extensions like
+              OctoNav-R1 and CoT-VLA further validate CoT as a promising
+              pathway toward human-like navigation reasoning. However, existing approaches face critical drawbacks:
+              purely textual CoTs lack spatial grounding and easily overfit
+              to sparse annotated reasoning steps, while multimodal CoTs incur severe token inflation by generating
+              imagined visual observations, making real-time navigation impractical.
+              In this work, we propose FantasyVLN, a unified implicit reasoning framework that preserves the benefits of
+              CoT reasoning without explicit token overhead.
+              Specifically, imagined visual tokens are encoded into a compact latent space using a pretrained Visual
+              AutoRegressor (VAR) during CoT reasoning training,
+              and the model jointly learns from textual, visual, and multimodal CoT modes under a unified multi-CoT
+              strategy. At inference, our model performs direct instruction-to-action mapping
+              while still enjoying reasoning-aware representations. Extensive experiments on LH-VLN show that our
+              approach achieves reasoning-aware yet real-time navigation,
+              improving success rates and efficiency while reducing inference latency by an order of magnitude compared
+              to explicit CoT methods.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="section">
+    <div class="container is-max-desktop section-title-tight">
+      <h2 class="title is-3">Overview</h2>
+      <div class="container container-wide">
+        <img class="overview-image" src="./assets/framework.jpg" alt="Overview">
+      </div>
+      <div class="columns is-vcentered columns-offset-md">
+        <div class="column is-full-width">
+          <div class="content has-text-justified">
+            <p>
+              FantasyVLN is a unified multimodal Chain-of-Thought (CoT) reasoning framework that enables efficient and
+              precise navigation based on natural language instructions and visual observations.
+              FantasyVLN combines the benefits of textual, visual, and multimodal CoT reasoning by constructing a
+              unified representation space across these reasoning modes.
+              To enable efficient reasoning, we align these CoT reasoning modes with non-CoT reasoning during training,
+              while using only non-CoT reasoning at test time.
+              Notably, we perform visual CoT in the latent space of a VAR model, where only low-scale latent
+              representations are predicted.
+              Compared to traditional pixel-level visual CoT methods, our approach significantly improves both training
+              and inference efficiency.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="hero-body">
+      <div class="container is-max-desktop section-title-flat">
+        <h2 class="title is-3">Main Results</h2>
+
+        &nbsp;
+        <h3 class="title is-5">Navigation Accuracy</h3>
+        <p>
+          The table below presents the quantitative results of navigation accuracy across different VLN methods on the
+          LH-VLN benchmark.
+          FantasyVLN achieves superior performance across all metrics, with SR, ISR, CSR, and CGT of 2.44, 11.01, 9.64,
+          and 8.99, respectively, significantly surpassing all baselines.
+        </p>
+        <img class="table-image" src="./assets/table2.png" alt="Table 2">
+        &nbsp;
+        <h3 class="title is-5">Inference Efficiency</h3>
+        <p>
+          We report APS (action per second) to quantify the inference efficiency of different CoT reasoning methods.
+          As expected, Implicit reasoning models, including FantasyVLN, Aux-Think, and WorldVLA, exhibit comparable
+          efficiency and outperform the explicit approach CoT-VLA by a substantial margin.
+        </p>
+        <img class="table-image" src="./assets/table4.png" alt="Table 4">
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="hero-body">
+      <div class="container is-max-desktop section-title-tight">
+        <h2 class="title is-3">More Results</h2>
+        
+        &nbsp;
+        <h3 class="title is-5">Ablations of VAR Scales</h3>
+        <p>
+          To select the optimal VAR scale for latent V-CoT learning, we conduct comprehensive ablation studies on a subset of LH-VLN.
+          We first report the ISR results across different VAR scales, ranging from 1 to 10.
+          The results show that scale 4 achieves the best performance.
+        </p>
+        <img class="table-image" src="./assets/var_scale.png" alt="VAR Scale">
+
+        &nbsp;
+        <h3 class="title is-5">Result of VAR Latent Reconstruction</h3>
+        <p>
+          Qualitative comparison of image reconstruction results produced by the VAR model using latent inputs across different scales. 
+          For each image, the VAR model receives the ground truth latents up to a specified scale and predicts all remaining scales; 
+          the final reconstruction is obtained by decoding the combined ground truth and predicted latents.
+        </p>
+        <img class="overview-image" src="./assets/var_reconstruction.png" alt="VAR Latent Reconstruction">
+
+        &nbsp;
+        <h3 class="title is-5">Training Efficiency</h3>
+        <p>
+          Unlike WorldVLA, which suffers from slow convergence due to high-dimensional pixel reconstruction, 
+          FantasyVLN achieves rapid and stable training by reasoning in a compact latent space via CompV-CoT. 
+          This significantly reduces optimization complexity, leading to efficient learning and enhanced navigation accuracy.
+        </p>
+        <img class="table-image" src="./assets/training_efficiency.png" alt="Training Efficiency">
+      </div>
+    </div>
+  </section>
+
+
+  <script>
+    // 初始化新的轮播组件
+    document.addEventListener("DOMContentLoaded", function () {
+      const newItems = document.querySelectorAll('.new-layout-item');
+      const newDotsContainer = document.getElementById('new-pagination-dots');
+      let currentNewIndex = 0;
+
+      // 创建分页点
+      newItems.forEach((_, index) => {
+        const dot = document.createElement('span');
+        dot.className = 'new-dot';
+        if (index === 0) dot.classList.add('active');
+        dot.addEventListener('click', () => setNewSlide(index));
+        newDotsContainer.appendChild(dot);
+      });
+
+      const newDots = document.querySelectorAll('.new-dot');
+      const prevBtn = document.querySelector('.new-layout-nav.prev');
+      const nextBtn = document.querySelector('.new-layout-nav.next');
+
+      function setNewSlide(index) {
+        // 边界处理
+        if (index >= newItems.length) index = 0;
+        if (index < 0) index = newItems.length - 1;
+
+        // 更新显示状态
+        newItems.forEach(item => item.classList.remove('active'));
+        newItems[index].classList.add('active');
+
+        // 更新分页点
+        newDots.forEach(dot => dot.classList.remove('active'));
+        newDots[index].classList.add('active');
+
+        currentNewIndex = index;
+      }
+
+      // 添加导航事件
+      prevBtn.addEventListener('click', () => setNewSlide(currentNewIndex - 1));
+      nextBtn.addEventListener('click', () => setNewSlide(currentNewIndex + 1));
+    });
+  </script>
+
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>@article{zuo2026fantasyvln,
+  title={FantasyVLN: Unified Multimodal Chain-of-Thought Reasoning for Vision-Language Navigation},
+  author={Zuo, Jing and Mu, Lingzhou and Jiang, Fan and Ma, Chengcheng and Xu, Mu and Qi, Yonggang},
+  journal={arXiv preprint arXiv:2601.13976},
+  year={2026}
+}</code></pre>
+    </div>
+  </section>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const heroVideo = document.querySelector(".video-player");
+      if (!heroVideo) return;
+
+      const tryPlayWithSound = function () {
+        heroVideo.muted = false;
+        const playPromise = heroVideo.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(function () {
+            const onUserGesture = function () {
+              heroVideo.muted = false;
+              heroVideo.play().catch(function () { });
+            };
+            window.addEventListener("pointerdown", onUserGesture, { once: true });
+            window.addEventListener("keydown", onUserGesture, { once: true });
+          });
+        }
+      };
+
+      tryPlayWithSound();
+    });
+  </script>
+  <script src="./static/js/more-research.js"></script>
+  <script>
+    loadMoreResearchDropdown({
+      mountId: "moreResearchDropdown",
+      jsonUrl: "https://raw.githubusercontent.com/Fantasy-AMAP/.github/refs/heads/main/profile/research.json"
+    });
+  </script>
+</body>
+
+</html>
