@@ -133,3 +133,17 @@ fantasy-vln/
 ```bash
 ./train.sh
 ```
+
+## Citation
+
+If you find this work helpful, please consider giving us a ⭐️ and citing:
+
+```bibtex
+@inproceedings{fantasyvln2026zuo,
+  title={FantasyVLN: Unified Multimodal Chain-of-Thought Reasoning for Vision-Language Navigation},
+  shorttitle={FantasyVLN},
+  author={Zuo, Jing and Mu, Lingzhou and Jiang, Fan and Ma, Chengcheng and Xu, Mu and Qi, Yonggang},
+  booktitle = {Proceedings of the {IEEE}/{CVF} Conference on Computer Vision and Pattern Recognition ({CVPR})},
+  year = {2026}
+}
+```
