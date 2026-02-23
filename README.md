@@ -1,4 +1,11 @@
 # FantasyVLN
+
+[![Home Page](https://img.shields.io/badge/🌐%20%20Project-FantasyVLN-blue.svg)](https://fantasy-amap.github.io/fantasy-vln/)
+[![arXiv](https://img.shields.io/badge/Arxiv-2601.13976-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2601.13976)
+[![Code](https://img.shields.io/badge/Code-GitHub-181717.svg?logo=GitHub)](https://github.com/Fantasy-AMAP/fantasy-vln.git)
+[![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-FFD21E)](https://huggingface.co/acvlab/FantasyVLN)
+[![ModelScope](https://img.shields.io/badge/ModelScope-Model-624AFF)](https://modelscope.cn/amap_cvlab/FantasyVLN)
+
 This project provides the online evaluation and distributed data parallel training code for **FantasyVLN**. The online evaluation is implemented based on the [LH-VLN](https://github.com/HCPLab-SYSU/LH-VLN) benchmark, and the training code is built upon [ms-swift](https://github.com/modelscope/ms-swift) and [qwen-vl](https://github.com/QwenLM/Qwen3-VL).
 
 ## Introduction
