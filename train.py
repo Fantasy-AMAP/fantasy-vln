@@ -6,7 +6,6 @@ from swift.llm.train.sft import SwiftSft
 from swift.llm.argument import TrainArguments
 from swift.trainers import TrainerFactory
 from swift.utils import get_logger, get_model_parameter_info
-from swift.llm.infer import get_cached_dataset
 
 from data.processor import load_dataset, UMMCoTDatasetLoader
 from my_qwen_template import MyQwen2_5VLTemplate
@@ -34,6 +33,9 @@ class MySwiftSft(SwiftSft):
     def _get_trainer_kwargs(self):
         kwargs = super()._get_trainer_kwargs()
         kwargs['use_ummcot'] = bool(getattr(self.args, 'use_ummcot', False))
+        kwargs['cross_mode_alignment'] = bool(getattr(self.args, 'cross_mode_alignment', False))
+        kwargs['alignment_temperature'] = float(getattr(self.args, 'alignment_temperature', 1.0))
+        kwargs['alignment_weight'] = float(getattr(self.args, 'alignment_weight', 1.0))
 
         return kwargs
     
@@ -63,9 +65,14 @@ class MySwiftSft(SwiftSft):
         args = self.args
         # Defer encoding to the training phase
         pre_process = not (hasattr(args, 'rlhf_type') and args.rlhf_type in ['grpo', 'gkd'])
-        if args.cached_dataset or args.cached_val_dataset:
+        if getattr(args, 'cached_dataset', None) or getattr(args, 'cached_val_dataset', None):
             assert not args.streaming, 'Cached dataset does not support streaming.'
-            train_datasets, val_datasets = get_cached_dataset(self.args)
+            if hasattr(self, '_get_cached_dataset'):
+                train_datasets, val_datasets = self._get_cached_dataset()
+            else:
+                from swift.llm.infer import get_cached_dataset
+
+                train_datasets, val_datasets = get_cached_dataset(self.args)
         else:
             train_datasets, val_datasets = [], []
         if args.dataset or args.val_dataset:
@@ -143,6 +150,14 @@ if __name__ == '__main__':
 
     my_parser = argparse.ArgumentParser(add_help=False)
     my_parser.add_argument('--use_ummcot', action=argparse.BooleanOptionalAction, default=True, help='')
+    my_parser.add_argument(
+        '--cross_mode_alignment',
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help='Use non-CoT predictions as soft action targets for CoT branches.',
+    )
+    my_parser.add_argument('--alignment_temperature', type=float, default=1.0)
+    my_parser.add_argument('--alignment_weight', type=float, default=1.0)
     my_args, remaining_argv = my_parser.parse_known_args()
 
     try_use_single_device_mode()
@@ -161,4 +176,7 @@ if __name__ == '__main__':
 
     sft = MySwiftSft(remaining_argv)
     sft.args.use_ummcot = my_args.use_ummcot
+    sft.args.cross_mode_alignment = my_args.cross_mode_alignment
+    sft.args.alignment_temperature = my_args.alignment_temperature
+    sft.args.alignment_weight = my_args.alignment_weight
     sft.main()

@@ -5,3 +5,34 @@
 # data files
 /data/lhvln_tcot_anno.xlsx
 
+# vibe coding files
+AGENTS.md
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+/tests/
+/test_train_alignment.sh
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.cache/
+build/
+dist/
+*.egg-info/
+
+# Training and experiment outputs
+/outputs/
+/checkpoints/
+/runs/
+/wandb/
+
+# Local environments and editor files
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+.DS_Store

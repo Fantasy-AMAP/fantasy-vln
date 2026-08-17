@@ -20,6 +20,8 @@ torchrun \
     --model 'Qwen/Qwen2.5-VL-7B-Instruct' \
     --train_type lora \
     --dataset my_training_data \
+    --use_ummcot \
+    --cross_mode_alignment \
     --new_special_tokens 'special_tokens/action_and_var_tokens.txt' \
     --torch_dtype bfloat16 \
     --num_train_epochs 1 \

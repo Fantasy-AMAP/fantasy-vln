@@ -2,6 +2,7 @@ import os
 import time
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.distributed as dist
 
 import shutil
@@ -76,9 +77,207 @@ logger = get_logger()
 
 
 class MySeq2SeqTrainer(Seq2SeqTrainer):
-    def __init__(self, *args, use_ummcot: bool = False, **kwargs):
+    COT_BRANCHES = ('T_CoT', 'V_CoT', 'MM_CoT')
+    ACTION_TOKENS = ('<|stop|>', '<|forward|>', '<|left|>', '<|right|>')
+
+    def __init__(
+        self,
+        *args,
+        use_ummcot: bool = False,
+        cross_mode_alignment: bool = False,
+        alignment_temperature: float = 1.0,
+        alignment_weight: float = 1.0,
+        **kwargs,
+    ):
         self.use_ummcot = use_ummcot
+        self.cross_mode_alignment = cross_mode_alignment
+        self.alignment_temperature = alignment_temperature
+        self.alignment_weight = alignment_weight
+        if alignment_temperature <= 0:
+            raise ValueError('alignment_temperature must be greater than zero.')
+        if alignment_weight < 0:
+            raise ValueError('alignment_weight must be non-negative.')
         super().__init__(*args, **kwargs)
+        self.action_token_ids = self._resolve_action_token_ids() if cross_mode_alignment else ()
+        if cross_mode_alignment:
+            self._validate_alignment_dataset()
+
+    def _resolve_action_token_ids(self):
+        tokenizer = self.template.tokenizer
+        action_token_ids = []
+        for token in self.ACTION_TOKENS:
+            token_ids = tokenizer.encode(token, add_special_tokens=False)
+            if len(token_ids) != 1:
+                raise ValueError(f'Action token {token!r} must map to exactly one token id, got {token_ids}.')
+            action_token_ids.append(token_ids[0])
+        return tuple(action_token_ids)
+
+    def _validate_alignment_dataset(self):
+        if not self.use_ummcot:
+            raise ValueError('cross_mode_alignment requires --use_ummcot.')
+        columns = set(getattr(self.train_dataset, 'column_names', []) or [])
+        if not columns:
+            # LazyLLMDataset in ms-swift 3.10+ does not expose source column metadata.
+            # The same invariant is checked again against every materialized batch.
+            return
+        cot_columns = columns.intersection(self.COT_BRANCHES)
+        if 'Non_CoT' not in columns or not cot_columns:
+            raise ValueError(
+                'cross_mode_alignment requires a Non_CoT column and at least one of '
+                f'{self.COT_BRANCHES}; found {sorted(columns)}.'
+            )
+
+    @staticmethod
+    def _action_mask(labels: torch.Tensor, action_token_ids) -> torch.Tensor:
+        mask = torch.zeros_like(labels, dtype=torch.bool)
+        for token_id in action_token_ids:
+            mask |= labels.eq(token_id)
+        return mask
+
+    @classmethod
+    def cross_mode_loss(
+        cls,
+        student_logits: torch.Tensor,
+        student_labels: torch.Tensor,
+        teacher_action_logits,
+        action_token_ids,
+        temperature: float,
+        alignment_weight: float,
+        branch_name: str,
+    ):
+        """Mix hard CoT-token targets with ordinally aligned soft action targets."""
+        shift_logits = student_logits[..., :-1, :].contiguous()
+        shift_labels = student_labels[..., 1:].contiguous()
+        valid_mask = shift_labels.ne(-100)
+        action_mask = cls._action_mask(shift_labels, action_token_ids) & valid_mask
+        hard_mask = valid_mask & ~action_mask
+
+        if hard_mask.any():
+            hard_loss = F.cross_entropy(shift_logits[hard_mask].float(), shift_labels[hard_mask])
+        else:
+            hard_loss = shift_logits.sum() * 0.0
+
+        soft_losses = []
+        for sample_idx in range(shift_labels.shape[0]):
+            student_actions = shift_logits[sample_idx][action_mask[sample_idx]]
+            teacher_actions = teacher_action_logits[sample_idx].to(student_actions.device)
+            if student_actions.shape[0] != teacher_actions.shape[0]:
+                raise ValueError(
+                    f'Action count mismatch for {branch_name}, sample {sample_idx}: '
+                    f'teacher={teacher_actions.shape[0]}, student={student_actions.shape[0]}.'
+                )
+            if student_actions.shape[0] == 0:
+                continue
+            teacher_probs = F.softmax(teacher_actions.float() / temperature, dim=-1)
+            student_log_probs = F.log_softmax(student_actions.float() / temperature, dim=-1)
+            soft_losses.append(-(teacher_probs * student_log_probs).sum(dim=-1))
+
+        if not soft_losses:
+            raise ValueError(f'No action tokens found while computing alignment loss for {branch_name}.')
+        soft_loss = torch.cat(soft_losses).mean() * (temperature ** 2)
+        return hard_loss + alignment_weight * soft_loss, hard_loss.detach(), soft_loss.detach()
+
+    def _backward(self, loss: torch.Tensor):
+        kwargs = {}
+        if self.args.optim in [OptimizerNames.LOMO, OptimizerNames.ADALOMO]:
+            kwargs['learning_rate'] = self._get_learning_rate()
+        if self.accelerator.distributed_type == DistributedType.DEEPSPEED:
+            kwargs['scale_wrt_gas'] = False
+        if self.use_apex:
+            from apex import amp
+
+            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                scaled_loss.backward()
+        else:
+            self.accelerator.backward(loss, **kwargs)
+
+    @staticmethod
+    def _model_forward_inputs(inputs):
+        inputs = dict(inputs)
+        for key in ('compute_loss_func', 'loss_scale', 'text_position_ids', 'channel'):
+            inputs.pop(key, None)
+        return inputs
+
+    def _teacher_action_logits(self, model, inputs):
+        cp_context, inputs = self._prepare_context_parallel_inputs(model, dict(inputs))
+        with cp_context():
+            inputs = self._prepare_inputs(inputs)
+            labels = inputs['labels']
+            with torch.no_grad(), self.compute_loss_context_manager():
+                outputs = model(**self._model_forward_inputs(inputs))
+            shift_logits = outputs.logits[..., :-1, :]
+            shift_labels = labels[..., 1:]
+            action_mask = self._action_mask(shift_labels, self.action_token_ids) & shift_labels.ne(-100)
+            action_logits = [
+                shift_logits[sample_idx][action_mask[sample_idx]].detach()
+                for sample_idx in range(shift_labels.shape[0])
+            ]
+            if any(logits.shape[0] == 0 for logits in action_logits):
+                missing = [i for i, logits in enumerate(action_logits) if logits.shape[0] == 0]
+                raise ValueError(f'Non_CoT teacher has no action tokens for samples {missing}.')
+            return action_logits
+
+    def _alignment_branch_step(self, model, inputs, teacher_action_logits, branch_name, branch_count):
+        cp_context, inputs = self._prepare_context_parallel_inputs(model, dict(inputs))
+        with cp_context():
+            inputs = self._prepare_inputs(inputs)
+            labels = inputs['labels']
+            with self.compute_loss_context_manager():
+                outputs = model(**self._model_forward_inputs(inputs))
+                loss, hard_loss, soft_loss = self.cross_mode_loss(
+                    outputs.logits,
+                    labels,
+                    teacher_action_logits,
+                    self.action_token_ids,
+                    self.alignment_temperature,
+                    self.alignment_weight,
+                    branch_name,
+                )
+            if self.args.n_gpu > 1:
+                loss = loss.mean()
+            scaled_loss = loss / (self.current_gradient_accumulation_steps * branch_count)
+            self._backward(scaled_loss)
+            return loss.detach(), hard_loss, soft_loss
+
+    def _optimizer_update(self, model):
+        args = self.args
+        grad_norm = None
+        if args.max_grad_norm is not None and args.max_grad_norm > 0:
+            if is_sagemaker_mp_enabled() and args.fp16:
+                grad_norm = self.optimizer.clip_master_grads(args.max_grad_norm)
+            elif self.use_apex:
+                from apex import amp
+
+                grad_norm = nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), args.max_grad_norm)
+            else:
+                grad_norm_context = contextlib.nullcontext
+                if self.is_tp_enabled:
+                    from torch.distributed._tensor.experimental import implicit_replication
+
+                    grad_norm_context = implicit_replication
+                with grad_norm_context():
+                    grad_norm = self.accelerator.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+            if is_accelerate_available() and self.accelerator.distributed_type == DistributedType.DEEPSPEED:
+                grad_norm = model.get_global_grad_norm()
+                if hasattr(grad_norm, 'item'):
+                    grad_norm = grad_norm.item()
+
+        self.control = self.callback_handler.on_pre_optimizer_step(args, self.state, self.control)
+        optimizer_context = contextlib.nullcontext
+        if self.is_tp_enabled:
+            from torch.distributed._tensor.experimental import implicit_replication
+
+            optimizer_context = implicit_replication
+        with optimizer_context():
+            self.optimizer.step()
+        self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
+        learning_rate = self._get_learning_rate()
+        if not self.accelerator.optimizer_step_was_skipped:
+            if not isinstance(self.lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                self.lr_scheduler.step()
+        model.zero_grad()
+        self.state.global_step += 1
+        return grad_norm, learning_rate
     
     def _inner_training_loop(
         self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
@@ -121,6 +320,15 @@ class MySeq2SeqTrainer(Seq2SeqTrainer):
             len_dataloader,
             max_steps,
         ) = self.set_initial_training_values(args, train_dataloader, total_train_batch_size)
+
+        if self.cross_mode_alignment:
+            num_update_steps_per_epoch *= 2
+            if epoch_based:
+                max_steps *= 2
+            else:
+                if max_steps % 2:
+                    raise ValueError('cross_mode_alignment requires an even --max_steps value.')
+                num_train_epochs = max(1, (max_steps + num_update_steps_per_epoch - 1) // num_update_steps_per_epoch)
 
         num_train_tokens = None
         if self.args.include_tokens_per_second:
@@ -274,6 +482,10 @@ class MySeq2SeqTrainer(Seq2SeqTrainer):
             epochs_trained = int(self.state.global_step // num_update_steps_per_epoch)
             if not args.ignore_data_skip:
                 steps_trained_in_current_epoch = self.state.global_step % (num_update_steps_per_epoch)
+                if self.cross_mode_alignment:
+                    if steps_trained_in_current_epoch % 2:
+                        raise ValueError('Cannot resume cross-mode alignment from a half-completed update pair.')
+                    steps_trained_in_current_epoch //= 2
                 steps_trained_in_current_epoch *= args.gradient_accumulation_steps
             else:
                 steps_trained_in_current_epoch = 0
@@ -351,6 +563,82 @@ class MySeq2SeqTrainer(Seq2SeqTrainer):
                 # Store the number of batches for current gradient accumulation
                 # This is used to correctly scale the loss when the last accumulation step has fewer batches
                 self.current_gradient_accumulation_steps = len(batch_samples)
+                if self.cross_mode_alignment:
+                    if rng_to_sync:
+                        self._load_rng_state(resume_from_checkpoint)
+                        rng_to_sync = False
+                    self.control = self.callback_handler.on_step_begin(args, self.state, self.control)
+                    non_cot_losses = []
+                    for i, inputs in enumerate(batch_samples):
+                        step += 1
+                        self.accelerator.gradient_state._set_sync_gradients(i == len(batch_samples) - 1)
+                        no_sync_context = (
+                            functools.partial(self.accelerator.no_sync, model=model)
+                            if i != len(batch_samples) - 1
+                            and self.accelerator.distributed_type != DistributedType.DEEPSPEED
+                            else contextlib.nullcontext
+                        )
+                        with no_sync_context():
+                            non_cot_losses.append(
+                                self.training_step(model, inputs, num_items_in_batch, mode='no_thinking')
+                            )
+                    self.accelerator.gradient_state._set_sync_gradients(True)
+                    non_cot_loss = torch.stack(non_cot_losses).mean()
+                    tr_loss = tr_loss + non_cot_loss
+                    grad_norm, learning_rate = self._optimizer_update(model)
+                    self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
+                    self.control = self.callback_handler.on_step_end(args, self.state, self.control)
+
+                    teacher_batches = [
+                        self._teacher_action_logits(model, inputs['Non_CoT']) for inputs in batch_samples
+                    ]
+
+                    self.control = self.callback_handler.on_step_begin(args, self.state, self.control)
+                    cot_losses = []
+                    for i, (inputs, teacher_logits) in enumerate(zip(batch_samples, teacher_batches)):
+                        cot_branches = [branch for branch in self.COT_BRANCHES if branch in inputs]
+                        if not cot_branches:
+                            raise ValueError(
+                                'cross_mode_alignment requires at least one CoT branch in every batch.'
+                            )
+                        self.accelerator.gradient_state._set_sync_gradients(i == len(batch_samples) - 1)
+                        no_sync_context = (
+                            functools.partial(self.accelerator.no_sync, model=model)
+                            if i != len(batch_samples) - 1
+                            and self.accelerator.distributed_type != DistributedType.DEEPSPEED
+                            else contextlib.nullcontext
+                        )
+                        with no_sync_context():
+                            branch_losses = []
+                            for branch_name in cot_branches:
+                                branch_loss, _, _ = self._alignment_branch_step(
+                                    model,
+                                    inputs[branch_name],
+                                    teacher_logits,
+                                    branch_name,
+                                    len(cot_branches),
+                                )
+                                branch_losses.append(branch_loss)
+                            cot_losses.append(torch.stack(branch_losses).mean())
+                    self.accelerator.gradient_state._set_sync_gradients(True)
+                    cot_loss = torch.stack(cot_losses).mean()
+                    tr_loss = tr_loss + cot_loss
+                    grad_norm, learning_rate = self._optimizer_update(model)
+                    self.state.epoch = epoch + (step + 1 + steps_skipped) / steps_in_epoch
+                    self.control = self.callback_handler.on_step_end(args, self.state, self.control)
+                    self._maybe_log_save_evaluate(
+                        tr_loss,
+                        grad_norm,
+                        model,
+                        trial,
+                        epoch,
+                        ignore_keys_for_eval,
+                        start_time,
+                        learning_rate=learning_rate,
+                    )
+                    if self.control.should_epoch_stop or self.control.should_training_stop:
+                        break
+                    continue
                 for i, inputs in enumerate(batch_samples):
                     step += 1
                     do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
@@ -612,12 +900,17 @@ class MySeq2SeqTrainer(Seq2SeqTrainer):
         Return:
             `torch.Tensor`: The tensor with training loss on this batch.
         """
-        if mode == "no_thinking" and self.use_mmcot:
+        if mode == "no_thinking" and self.use_ummcot:
+            if 'Non_CoT' not in inputs:
+                raise ValueError('UMMCoT non-CoT training requires a Non_CoT branch.')
             inputs_list = [inputs['Non_CoT']]
-        elif mode == "no_thinking" and not self.use_mmcot:
+        elif mode == "no_thinking" and not self.use_ummcot:
             inputs_list = [inputs]
         else:
-            inputs_list = [inputs['Non_CoT'], inputs['T_CoT'], inputs['V_CoT'], inputs['MM_CoT']]
+            branch_names = ('Non_CoT',) + self.COT_BRANCHES
+            inputs_list = [inputs[name] for name in branch_names if name in inputs]
+            if not inputs_list:
+                raise ValueError(f'No recognized UMMCoT branches found in {sorted(inputs)}.')
 
         del inputs
         

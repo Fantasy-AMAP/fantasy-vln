@@ -85,7 +85,7 @@ You must specify the following parameters before runing the script:
 conda create -n fantasyvln_train python=3.10
 conda activate fantasyvln_train
 pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 xformers
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Prepare Training Data
@@ -133,6 +133,10 @@ fantasy-vln/
 ```bash
 ./train.sh
 ```
+
+`train.sh` enables all UMMCoT branches and two-stage non-CoT/CoT alignment by default.
+The optional `--alignment_temperature` and `--alignment_weight` arguments both default
+to `1.0`.
 
 ## Citation
 
